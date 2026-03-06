@@ -55,6 +55,18 @@ target_link_libraries(gravity_demo PRIVATE ballistx)
 add_executable(quaternion_demo examples/quaternion_demo.cpp)
 target_link_libraries(quaternion_demo PRIVATE ballistx)
 
+# 6-DOF state demo
+add_executable(state_6dof_demo examples/state_6dof_demo.cpp)
+target_link_libraries(state_6dof_demo PRIVATE ballistx)
+
+# Magnus effect demo
+add_executable(magnus_demo examples/magnus_demo.cpp)
+target_link_libraries(magnus_demo PRIVATE ballistx)
+
+# Coriolis effect demo
+add_executable(coriolis_demo examples/coriolis_demo.cpp)
+target_link_libraries(coriolis_demo PRIVATE ballistx)
+
 # Tests executable
 enable_testing()
 add_executable(ballistx_tests tests/main_tests.cpp)
