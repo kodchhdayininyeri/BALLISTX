@@ -51,6 +51,10 @@ target_link_libraries(mach_drag_demo PRIVATE ballistx)
 add_executable(gravity_demo examples/gravity_demo.cpp)
 target_link_libraries(gravity_demo PRIVATE ballistx)
 
+# Quaternion demo
+add_executable(quaternion_demo examples/quaternion_demo.cpp)
+target_link_libraries(quaternion_demo PRIVATE ballistx)
+
 # Tests executable
 enable_testing()
 add_executable(ballistx_tests tests/main_tests.cpp)
