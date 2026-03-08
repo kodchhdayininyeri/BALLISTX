@@ -67,6 +67,14 @@ target_link_libraries(magnus_demo PRIVATE ballistx)
 add_executable(coriolis_demo examples/coriolis_demo.cpp)
 target_link_libraries(coriolis_demo PRIVATE ballistx)
 
+# Wind model demo
+add_executable(wind_model_demo examples/wind_model_demo.cpp)
+target_link_libraries(wind_model_demo PRIVATE ballistx)
+
+# Projectile types demo
+add_executable(projectile_types_demo examples/projectile_types_demo.cpp)
+target_link_libraries(projectile_types_demo PRIVATE ballistx)
+
 # Tests executable
 enable_testing()
 add_executable(ballistx_tests tests/main_tests.cpp)

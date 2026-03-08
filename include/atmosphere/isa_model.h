@@ -3,6 +3,7 @@
 
 #include "utils/vec3.h"
 #include <cmath>
+#include <random>
 
 namespace ballistx {
 
@@ -29,6 +30,7 @@ public:
     // Constructors
     Atmosphere() = default;
     explicit Atmosphere(double altitude);
+    ~Atmosphere() = default;
 
     // Get atmospheric properties at current altitude
     double get_temperature() const { return temperature_; }
@@ -37,10 +39,21 @@ public:
     double get_altitude() const { return altitude_; }
     double get_speed_of_sound() const;
 
-    // Wind
+    // Wind model
     Vec3 get_wind_velocity() const { return wind_velocity_; }
     void set_wind_velocity(const Vec3& wind) { wind_velocity_ = wind; }
     void set_wind(double speed_x, double speed_y, double speed_z);
+
+    // Turbulence model (Gaussian noise)
+    Vec3 get_turbulent_wind() const;
+    void set_turbulence_intensity(double intensity) { turbulence_intensity_ = intensity; }
+    double get_turbulence_intensity() const { return turbulence_intensity_; }
+    void enable_turbulence(bool enable) { turbulence_enabled_ = enable; }
+    bool is_turbulence_enabled() const { return turbulence_enabled_; }
+
+    // Relative velocity calculation (v_projectile - v_wind_with_turbulence)
+    Vec3 get_relative_velocity(const Vec3& projectile_velocity) const;
+    Vec3 get_airspeed(const Vec3& ground_speed) const;
 
     // Set altitude and recalculate atmospheric properties
     void set_altitude(double altitude);
@@ -57,6 +70,12 @@ private:
     double pressure_ = SEA_LEVEL_PRESSURE; // Pa
     double density_ = SEA_LEVEL_DENSITY;   // kg/m^3
     Vec3 wind_velocity_ = Vec3::zero();    // m/s
+
+    // Turbulence parameters
+    double turbulence_intensity_ = 0.1;    // 10% default turbulence (0.0 = none, 1.0 = 100%)
+    bool turbulence_enabled_ = false;
+    mutable std::mt19937 rng_{std::random_device{}()};  // Random number generator
+    mutable std::normal_distribution<double> dist_{0.0, 1.0};  // Standard normal distribution
 
     void update_atmosphere();
 };
