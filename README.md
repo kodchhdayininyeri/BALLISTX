@@ -411,10 +411,12 @@ python python_demo.py
 python visualizer/plot2d.py
 ```
 
-**Generates:**
+**Generates PNG files:**
 - `trajectory_2d.png` - Range vs Altitude for multiple launch angles
 - `velocity_profile.png` - Velocity vs Range
 - `energy_profile.png` - Kinetic/Potential/Total energy vs Altitude
+
+> **Note:** PNG files are generated locally - not included in repository. Run the script above to create them.
 
 ![2D Trajectory](visualizer/trajectory_2d.png)
 
@@ -423,11 +425,13 @@ python visualizer/plot2d.py
 python visualizer/plot3d.py
 ```
 
-**Generates:**
+**Generates HTML files (open in browser):**
 - `trajectory_3d.html` - Interactive 3D comparison (wind, Magnus effects)
 - `wind_comparison.html` - Crosswind effects at different speeds
 - `magnus_analysis.html` - Magnus effect at different spin rates
 - `drift_2d.html` - Top-down drift view
+
+> **Note:** HTML files are generated locally - not included in repository to keep it clean. Run the script above to create them.
 
 **Features:**
 - Interactive rotation, zoom, pan
