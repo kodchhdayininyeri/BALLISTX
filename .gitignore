@@ -38,3 +38,13 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Python
+*.pyc
+__pycache__/
+*.pyd
+*.so
+
+# Visualization outputs (generated files)
+visualizer/*.html
+visualizer/*.png
