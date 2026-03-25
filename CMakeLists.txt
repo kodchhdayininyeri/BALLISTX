@@ -92,11 +92,84 @@ target_link_libraries(target_demo PRIVATE ballistx)
 add_executable(miss_distance_demo examples/miss_distance_demo.cpp)
 target_link_libraries(miss_distance_demo PRIVATE ballistx)
 
-# Tests executable
-enable_testing()
-add_executable(ballistx_tests tests/main_tests.cpp)
-if(TARGET ballistx)
-    target_link_libraries(ballistx_tests PRIVATE ballistx)
+# EKF demo
+add_executable(ekf_demo examples/ekf_demo.cpp)
+target_link_libraries(ekf_demo PRIVATE ballistx)
+
+# Kalman visualization demo
+add_executable(kalman_visualization_demo examples/kalman_visualization_demo.cpp)
+target_link_libraries(kalman_visualization_demo PRIVATE ballistx)
+
+# ========================================================================
+# Unit Tests with Google Test
+# ========================================================================
+option(BUILD_TESTS "Build unit tests" ON)
+
+if(BUILD_TESTS)
+    # Include FetchContent module
+    include(FetchContent)
+
+    # Download and configure Google Test
+    FetchContent_Declare(
+        googletest
+        GIT_REPOSITORY https://github.com/google/googletest.git
+        GIT_TAG v1.14.0
+        GIT_SHALLOW TRUE
+    )
+
+    # For Windows: Prevent overriding parent project's compiler/linker settings
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+
+    FetchContent_MakeAvailable(googletest)
+
+    # Disable compiling gtest's own tests
+    set(gtest_disable_pthreads ON CACHE BOOL "" FORCE)
+
+    message(STATUS "Google Test configured via FetchContent")
+
+    # Create test executable
+    add_executable(ballistx_tests
+        tests/main_tests.cpp
+        tests/test_vec3.cpp
+        tests/test_quaternion.cpp
+        tests/test_projectile.cpp
+        tests/test_guidance.cpp
+    )
+
+    # Kalman filter test executable (standalone, no GoogleTest)
+    add_executable(kalman_filter_test tests/test_kalman_filter.cpp)
+    target_link_libraries(kalman_filter_test PRIVATE ballistx)
+
+    # Radar model test executable (standalone, no GoogleTest)
+    add_executable(radar_model_test tests/test_radar_model.cpp)
+    target_link_libraries(radar_model_test PRIVATE ballistx)
+
+    # IMU model test executable (standalone, no GoogleTest)
+    add_executable(imu_model_test tests/test_imu_model.cpp)
+    target_link_libraries(imu_model_test PRIVATE ballistx)
+
+    # Sensor fusion test executable (standalone, no GoogleTest)
+    add_executable(sensor_fusion_test tests/test_sensor_fusion.cpp)
+    target_link_libraries(sensor_fusion_test PRIVATE ballistx)
+
+    target_link_libraries(ballistx_tests
+        PRIVATE
+        ballistx
+        gtest
+        gtest_main
+    )
+
+    target_include_directories(ballistx_tests
+        PRIVATE
+        ${PROJECT_SOURCE_DIR}/include
+    )
+
+    # Discover tests
+    enable_testing()
+    include(GoogleTest)
+    gtest_discover_tests(ballistx_tests)
+
+    message(STATUS "Unit tests configured - run with: cmake --build build --target test")
 endif()
 
 # ========================================================================

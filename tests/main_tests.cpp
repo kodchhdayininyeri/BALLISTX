@@ -1,14 +1,6 @@
-#include <iostream>
-#include <cassert>
+#include <gtest/gtest.h>
 
-int main() {
-    std::cout << "BALLISTX Test Suite" << std::endl;
-
-    // Basic C++17 feature test
-    assert((__cplusplus >= 201703L) && "C++17 required");
-
-    std::cout << "✓ C++17 support confirmed" << std::endl;
-    std::cout << "✓ All tests passed!" << std::endl;
-
-    return 0;
+int main(int argc, char **argv) {
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
 }

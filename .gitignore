@@ -48,3 +48,6 @@ __pycache__/
 # Visualization outputs (generated files)
 visualizer/*.html
 visualizer/*.png
+
+# Test results
+Testing/

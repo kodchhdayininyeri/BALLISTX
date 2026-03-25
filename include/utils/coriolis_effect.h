@@ -3,48 +3,109 @@
 
 #include "utils/vec3.h"
 #include <cmath>
+#include <iostream>
+#include <tuple>
+#include <utility>
+#include <string>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 namespace ballistx {
 
 /**
- * @brief Coriolis Effect for Long-Range Ballistics
+ * @brief Coriolis effect calculations for long-range ballistics
  *
- * Due to Earth's rotation, moving objects experience an apparent deflection
- * called the Coriolis effect. This is critical for long-range artillery,
- * ICBMs, and precision sniping.
+ * Simulates the apparent deflection of moving objects due to Earth's rotation.
+ * This is a fictitious force that appears in the rotating reference frame of Earth.
  *
- * Formula: F_coriolis = -2 × m × (Ω × v)
+ * **Physical Background:**
+ * - Earth rotates eastward at angular velocity Ω = 7.2921×10⁻⁵ rad/s
+ * - Objects moving in the rotating frame experience apparent deflection
+ * - Deflection is to the RIGHT in northern hemisphere
+ * - Deflection is to the LEFT in southern hemisphere
+ * - Zero deflection at the equator
  *
- * Where:
- *   m = mass of projectile (kg)
- *   Ω = Earth's angular velocity vector (rad/s)
- *   v = velocity vector (m/s)
+ * **Formula:**
+ * ```
+ * F_coriolis = -2 × m × (Ω × v)
+ * a_coriolis = -2 × (Ω × v)
+ * ```
  *
- * Physical explanation:
- * - Earth rotates eastward at angular velocity Ω
- * - Object moving northward has higher eastward velocity at equator
- * - Appears to deflect to RIGHT in northern hemisphere
- * - Appears to deflect to LEFT in southern hemisphere
+ * **Where:**
+ * - m = mass of projectile (kg)
+ * - Ω = Earth's angular velocity vector (rad/s)
+ * - v = velocity vector (m/s)
  *
- * Applications:
- * - Long-range artillery (20km+)
- * - Sniper shots (1000m+)
- * - ICBM trajectory calculations
- * - Weather pattern prediction
+ * **Applications:**
+ * - Long-range artillery (20 km+): deflection of 10-100 meters
+ * - Sniper shots (1000 m+): deflection of 5-10 cm
+ * - ICBM trajectory calculations: deflection of hundreds of kilometers
+ * - Weather pattern prediction: cyclone formation
+ *
+ * @example
+ * @code
+ * // Calculate Coriolis acceleration for artillery shell
+ * Vec3 velocity(300.0, 0.0, 0.0);  // 300 m/s eastward
+ * double latitude = 45.0 * M_PI / 180.0;  // 45° north
+ *
+ * Vec3 coriolis_accel = CoriolisEffect::calculate_acceleration(velocity, latitude);
+ *
+ * // Calculate deflection for 30 km shot
+ * auto [east_defl, north_defl] = CoriolisEffect::calculate_artillery_deflection(
+ *     30000.0,  // range (m)
+ *     60.0,    // flight time (s)
+ *     45.0,    // latitude (degrees)
+ *     90.0     // azimuth (degrees, east)
+ * );
+ *
+ * // Check if Coriolis is significant
+ * bool significant = CoriolisEffect::is_significant(5000.0, 30.0, 45.0);
+ * @endcode
+ *
+ * @see GravityModel for gravitational effects
  */
 class CoriolisEffect {
 public:
-    // Earth's rotation parameters
-    static constexpr double EARTH_OMEGA_MAGNITUDE = 7.2921e-5;  // rad/s
-    static constexpr double EARTH_ROTATION_PERIOD = 86164.09;  // seconds (sidereal day)
-    static constexpr double EARTH_RADIUS = 6371000.0;        // meters
+    /**
+     * @brief Earth's angular velocity magnitude
+     *
+     * Ω = 2π / sidereal_day = 7.2921×10⁻⁵ rad/s
+     */
+    static constexpr double EARTH_OMEGA_MAGNITUDE = 7.2921e-5;  ///< rad/s
+
+    /**
+     * @brief Earth's sidereal rotation period
+     *
+     * Time for one rotation relative to fixed stars: ~23h 56m 4s
+     */
+    static constexpr double EARTH_ROTATION_PERIOD = 86164.09;  ///< seconds
+
+    /**
+     * @brief Earth's mean radius
+     *
+     * Average distance from center to surface: 6,371 km
+     */
+    static constexpr double EARTH_RADIUS = 6371000.0;  ///< meters
 
     /**
      * @brief Calculate Coriolis acceleration
      *
-     * @param velocity Object velocity (m/s)
+     * Computes the Coriolis acceleration for a given velocity and latitude.
+     * Uses the formula: a_c = -2 × (Ω × v)
+     *
+     * @param velocity Object velocity vector (m/s)
      * @param latitude Latitude in radians (positive for north)
-     * @return Coriolis acceleration (m/s²)
+     * @return Coriolis acceleration vector (m/s²)
+     *
+     * @example
+     * @code
+     * Vec3 vel(100.0, 0.0, 0.0);  // Moving east
+     * double lat = 45.0 * M_PI / 180.0;  // 45°N
+     * Vec3 accel = CoriolisEffect::calculate_acceleration(vel, lat);
+     * // accel points south and down (right deflection)
+     * @endcode
      */
     static Vec3 calculate_acceleration(const Vec3& velocity, double latitude) {
         // Earth's angular velocity vector (pointing north along Earth's axis)
@@ -60,10 +121,19 @@ public:
     /**
      * @brief Calculate Coriolis force
      *
-     * @param velocity Object velocity (m/s)
+     * Computes the Coriolis force: F_c = m × a_c
+     *
+     * @param velocity Object velocity vector (m/s)
      * @param latitude Latitude in radians
      * @param mass Object mass (kg)
-     * @return Coriolis force (Newtons)
+     * @return Coriolis force vector (Newtons)
+     *
+     * @example
+     * @code
+     * Vec3 vel(500.0, 0.0, 0.0);
+     * double mass = 50.0;  // kg
+     * Vec3 force = CoriolisEffect::calculate_force(vel, 45.0 * M_PI / 180.0, mass);
+     * @endcode
      */
     static Vec3 calculate_force(const Vec3& velocity, double latitude, double mass) {
         Vec3 accel = calculate_acceleration(velocity, latitude);
@@ -73,12 +143,13 @@ public:
     /**
      * @brief Calculate Coriolis acceleration with full Earth rotation vector
      *
-     * More accurate version that accounts for Earth's 3D rotation
+     * More accurate version that accounts for Earth's 3D rotation in ECEF coordinates.
+     * Use for global-scale calculations or high-precision work.
      *
-     * @param velocity Object velocity (m/s)
+     * @param velocity Object velocity vector (m/s)
      * @param latitude Latitude in radians
-     * @param longitude Longitude in radians (optional, for global calculations)
-     * @return Coriolis acceleration (m/s²)
+     * @param longitude Longitude in radians (optional, default: 0)
+     * @return Coriolis acceleration vector (m/s²)
      */
     static Vec3 calculate_acceleration_3d(const Vec3& velocity,
                                             double latitude,
@@ -94,13 +165,26 @@ public:
     /**
      * @brief Estimate lateral deflection due to Coriolis effect
      *
-     * Simplified formula for east-west and north-south deflection
+     * Simplified formula for quick estimation of east-west and north-south
+     * deflection based on range, flight time, and latitude.
      *
      * @param range Target range (m)
      * @param latitude Latitude in radians
      * @param flight_time Total flight time (s)
-     * @param azimuth Firing azimuth (radians, 0 = north, 90° = east)
-     * @return Lateral deflection (meters)
+     * @param azimuth Firing azimuth (radians, 0 = north, π/2 = east)
+     * @return Lateral deflection vector (east, 0, north) in meters
+     *
+     * @example
+     * @code
+     * double range = 25000.0;  // 25 km
+     * double flight_time = 55.0;  // seconds
+     * double lat = 50.0 * M_PI / 180.0;  // 50°N
+     * double azimuth = 90.0 * M_PI / 180.0;  // East
+     *
+     * Vec3 deflection = CoriolisEffect::estimate_lateral_deflection(
+     *     range, lat, flight_time, azimuth
+     * );
+     * @endcode
      */
     static Vec3 estimate_lateral_deflection(double range,
                                            double latitude,
@@ -117,11 +201,26 @@ public:
     /**
      * @brief Calculate deflection for artillery shell
      *
+     * Practical calculation for artillery fire control.
+     * Returns deflection components in east and north directions.
+     *
      * @param range Target range (m)
      * @param flight_time Flight time (s)
-     * @param latitude Latitude in degrees
-     * @param azimuth Azimuth in degrees
-     * @return [east_deflection, north_deflection] in meters
+     * @param latitude_degrees Latitude in degrees
+     * @param azimuth_degrees Azimuth in degrees (0 = north, 90 = east)
+     * @return Pair of (east_deflection, north_deflection) in meters
+     *
+     * @example
+     * @code
+     * auto [east, north] = CoriolisEffect::calculate_artillery_deflection(
+     *     30000.0,  // 30 km range
+     *     60.0,     // 60 second flight time
+     *     45.0,     // 45°N latitude
+     *     90.0      // firing east
+     * );
+     * std::cout << "East deflection: " << east << " m" << std::endl;
+     * std::cout << "North deflection: " << north << " m" << std::endl;
+     * @endcode
      */
     static std::pair<double, double> calculate_artillery_deflection(
         double range,
@@ -146,10 +245,23 @@ public:
     /**
      * @brief Calculate correction for sniper shot
      *
+     * Estimates the Coriolis correction needed for precision sniping.
+     * Returns correction in MOA (Minutes of Angle) and inches.
+     *
      * @param range Target range (m)
-     * @param latitude Latitude in degrees
-     * @param azimuth Azimuth to target (degrees, 0 = north)
-     * @return Correction in MOA (Minutes of Angle) and inches
+     * @param latitude_degrees Latitude in degrees
+     * @param azimuth_degrees Azimuth to target (degrees, 0 = north)
+     * @return Pair of (correction_moa, correction_inches)
+     *
+     * @example
+     * @code
+     * auto [moa, inches] = CoriolisEffect::calculate_sniper_correction(
+     *     1500.0,  // 1500 m range
+     *     50.0,    // 50°N latitude
+     *     0.0      // firing north
+     * );
+     * std::cout << "Apply " << moa << " MOA correction (" << inches << " inches)" << std::endl;
+     * @endcode
      */
     static std::pair<double, double> calculate_sniper_correction(
         double range,
@@ -180,6 +292,9 @@ public:
     /**
      * @brief Get Earth's angular velocity vector at latitude
      *
+     * Returns the Earth's rotation vector in local coordinates.
+     * The Z component points north along the Earth's axis.
+     *
      * @param latitude Latitude in radians
      * @return Angular velocity vector (rad/s)
      */
@@ -194,9 +309,11 @@ public:
     /**
      * @brief Get full 3D Earth angular velocity vector
      *
+     * Returns the complete Earth rotation vector in ECEF coordinates.
+     *
      * @param latitude Latitude in radians
      * @param longitude Longitude in radians
-     * @return Angular velocity in ECEF coordinates (rad/s)
+     * @return Angular velocity vector in ECEF coordinates (rad/s)
      */
     static Vec3 get_earth_omega_vector_3d(double latitude, double longitude) {
         double omega = EARTH_OMEGA_MAGNITUDE;
@@ -217,10 +334,11 @@ public:
     /**
      * @brief Calculate Coriolis frequency (inertial oscillation frequency)
      *
-     * For atmospheric and ocean dynamics
+     * Used in atmospheric and ocean dynamics for computing
+     * inertial oscillations and geostrophic flow.
      *
      * @param latitude Latitude in radians
-     * @return Coriolis frequency (rad/s)
+     * @return Coriolis frequency f = 2Ω sin(φ) (rad/s)
      */
     static double get_coriolis_frequency(double latitude) {
         return 2.0 * EARTH_OMEGA_MAGNITUDE * std::sin(latitude);
@@ -229,11 +347,11 @@ public:
     /**
      * @brief Get Coriolis parameter for calculations
      *
-     * f = 2Ω × sin(φ)
-     * Used in meteorology and oceanography
+     * Alias for get_coriolis_frequency(). Commonly used in
+     * meteorology and oceanography (denoted as 'f').
      *
      * @param latitude Latitude in radians
-     * @return Coriolis parameter (rad/s)
+     * @return Coriolis parameter f = 2Ω sin(φ) (rad/s)
      */
     static double get_coriolis_parameter(double latitude) {
         return get_coriolis_frequency(latitude);
@@ -242,10 +360,23 @@ public:
     /**
      * @brief Check if Coriolis effect is significant for given parameters
      *
+     * Determines if Coriolis deflection exceeds a practical threshold
+     * (10 cm by default). Useful for deciding when to include Coriolis
+     * in simulations.
+     *
      * @param range Target range (m)
      * @param flight_time Flight time (s)
-     * @param latitude Latitude in degrees
-     * @return True if deflection > 0.1m
+     * @param latitude_degrees Latitude in degrees
+     * @return true if deflection > 0.1 m, false otherwise
+     *
+     * @example
+     * @code
+     * bool needs_correction = CoriolisEffect::is_significant(
+     *     5000.0,  // 5 km range
+     *     10.0,    // 10 s flight time
+     *     45.0     // 45° latitude
+     * );
+     * @endcode
      */
     static bool is_significant(double range,
                              double flight_time,
@@ -263,23 +394,33 @@ public:
     /**
      * @brief Calculate latitude-dependent deflection multiplier
      *
-     * Coriolis effect is zero at equator, maximum at poles
+     * Coriolis effect varies with latitude, being zero at the equator
+     * and maximum at the poles. This returns a normalized multiplier.
      *
      * @param latitude_degrees Latitude in degrees
      * @return Multiplier (0.0 at equator, 1.0 at poles)
+     *
+     * @example
+     * @code
+     * double multiplier = CoriolisEffect::get_latitude_multiplier(45.0);
+     * // multiplier ≈ 0.707 (sin(45°))
+     * @endcode
      */
     static double get_latitude_multiplier(double latitude_degrees) {
         return std::abs(std::sin(latitude_degrees * M_PI / 180.0));
     }
 
     /**
-     * @brief Calculate deflection for specific scenario
+     * @brief Calculate deflection for specific trajectory scenario
+     *
+     * Estimates the range and Coriolis deflection for a projectile
+     * with given launch parameters using simplified vacuum trajectory.
      *
      * @param velocity Launch velocity (m/s)
      * @param launch_angle Launch angle (radians)
      * @param latitude_degrees Latitude in degrees
      * @param azimuth_degrees Azimuth in degrees
-     * @return [range, deflection_right, deflection_up] in meters
+     * @return Tuple of (range, deflection_right, deflection_up) in meters
      */
     static std::tuple<double, double, double> calculate_trajectory_deflection(
         double velocity,
@@ -311,8 +452,17 @@ public:
     /**
      * @brief Explain Coriolis effect direction
      *
+     * Returns a human-readable description of the deflection
+     * direction for a given latitude.
+     *
      * @param latitude_degrees Latitude in degrees
-     * @return Direction description
+     * @return Direction description string
+     *
+     * @example
+     * @code
+     * std::string dir = CoriolisEffect::get_deflection_direction(45.0);
+     * // dir = "RIGHT (Northern Hemisphere)"
+     * @endcode
      */
     static std::string get_deflection_direction(double latitude_degrees) {
         if (latitude_degrees > 0.0) {
@@ -327,8 +477,11 @@ public:
     /**
      * @brief Print Coriolis effect summary for location
      *
+     * Outputs a formatted summary of Coriolis parameters and
+     * significance thresholds for a given location.
+     *
      * @param latitude_degrees Latitude in degrees
-     * @param longitude_degrees Longitude in degrees
+     * @param longitude_degrees Longitude in degrees (optional)
      */
     static void print_location_info(double latitude_degrees,
                                    double longitude_degrees = 0.0) {

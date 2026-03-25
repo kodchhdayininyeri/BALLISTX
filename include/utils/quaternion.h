@@ -4,45 +4,113 @@
 #include "utils/vec3.h"
 #include <cmath>
 #include <iostream>
+#include <utility>
 
 namespace ballistx {
 
 /**
- * @brief Quaternion class for 3D rotations
+ * @brief Quaternion class for 3D rotations and orientation
  *
- * Quaternion: q = w + xi + yj + zk
+ * Quaternions represent 3D rotations as: q = w + xi + yj + zk
+ * where w is the scalar part and (x, y, z) is the vector part.
  *
- * Advantages over Euler angles:
+ * **Advantages over Euler angles:**
  * - No gimbal lock
  * - Smooth interpolation (slerp)
- * - Efficient composition
- * - Numerically stable
+ * - Efficient composition of rotations
+ * - Numerically stable for long simulations
+ * - Compact representation (4 numbers vs 9 for rotation matrix)
  *
- * Common uses:
- * - projectile orientation
- * - camera rotation
- * - angular velocity integration
- * - aerospace attitude control
+ * **Common uses in ballistics:**
+ * - Projectile orientation and attitude
+ * - Camera and sensor rotation
+ * - Angular velocity integration
+ * - Aerospace attitude control
+ * - Transforming vectors between coordinate frames
+ *
+ * @example
+ * @code
+ * // Create rotation from Euler angles (pitch, yaw, roll)
+ * Quaternion q = Quaternion::from_euler(0.1, 0.5, 0.0);  // radians
+ *
+ * // Rotate a vector
+ * Vec3 forward(0.0, 0.0, 1.0);
+ * Vec3 rotated = q.rotate(forward);
+ *
+ * // Compose rotations
+ * Quaternion q1 = Quaternion::from_axis_angle(Vec3::up(), 0.5);
+ * Quaternion q2 = Quaternion::from_axis_angle(Vec3::right(), 0.3);
+ * Quaternion combined = q1 * q2;  // Apply q1 first, then q2
+ *
+ * // Integrate angular velocity
+ * Quaternion orientation = Quaternion::identity();
+ * Vec3 angular_velocity(0.1, 0.0, 0.0);  // rad/s
+ * double dt = 0.01;
+ * Quaternion dq = Quaternion::from_axis_angle(
+ *     angular_velocity.normalized(),
+ *     angular_velocity.magnitude() * dt
+ * );
+ * orientation = (dq * orientation).normalized();
+ * @endcode
+ *
+ * @see Vec3 for 3D vector operations
  */
 class Quaternion {
 public:
-    double w = 1.0;  // Scalar part (cos(θ/2))
-    double x = 0.0;  // Vector part X (axis.x * sin(θ/2))
-    double y = 0.0;  // Vector part Y (axis.y * sin(θ/2))
-    double z = 0.0;  // Vector part Z (axis.z * sin(θ/2))
+    double w = 1.0;  ///< Scalar part (cos(θ/2) for rotation quaternions)
+    double x = 0.0;  ///< Vector part X component (axis.x * sin(θ/2))
+    double y = 0.0;  ///< Vector part Y component (axis.y * sin(θ/2))
+    double z = 0.0;  ///< Vector part Z component (axis.z * sin(θ/2))
 
     // === CONSTRUCTORS ===
 
+    /**
+     * @brief Default constructor - creates identity quaternion (no rotation)
+     *
+     * Initializes to (1, 0, 0, 0) which represents no rotation.
+     *
+     * @example
+     * @code
+     * Quaternion q;  // Identity quaternion
+     * Vec3 v(1.0, 0.0, 0.0);
+     * Vec3 rotated = q.rotate(v);  // Still (1.0, 0.0, 0.0)
+     * @endcode
+     */
     constexpr Quaternion() = default;
 
+    /**
+     * @brief Parameterized constructor
+     *
+     * Creates a quaternion with specified components.
+     * Note: For rotation quaternions, the quaternion must be normalized.
+     *
+     * @param w Scalar component
+     * @param x X component of vector part
+     * @param y Y component of vector part
+     * @param z Z component of vector part
+     */
     constexpr Quaternion(double w, double x, double y, double z)
         : w(w), x(x), y(y), z(z) {}
 
     /**
      * @brief Create quaternion from axis-angle rotation
      *
+     * Creates a rotation quaternion representing a rotation of `angle`
+     * radians around the given axis. The axis should be normalized.
+     *
      * @param axis Normalized rotation axis
      * @param angle Rotation angle in radians
+     * @return Rotation quaternion
+     *
+     * @example
+     * @code
+     * // Rotate 45 degrees around the Y axis
+     * Quaternion q = Quaternion::from_axis_angle(Vec3::up(), M_PI / 4);
+     *
+     * // Rotate 90 degrees around arbitrary axis
+     * Vec3 axis = Vec3(1.0, 1.0, 1.0).normalized();
+     * Quaternion q = Quaternion::from_axis_angle(axis, M_PI / 2);
+     * @endcode
      */
     static Quaternion from_axis_angle(const Vec3& axis, double angle) {
         double half_angle = angle * 0.5;
@@ -56,11 +124,24 @@ public:
     }
 
     /**
-     * @brief Create quaternion from Euler angles (pitch, yaw, roll)
+     * @brief Create quaternion from Euler angles
      *
-     * @param pitch Rotation around X axis (radians)
-     * @param yaw Rotation around Y axis (radians)
-     * @param roll Rotation around Z axis (radians)
+     * Creates a rotation quaternion from pitch, yaw, and roll angles.
+     * Uses aerospace convention: Y-P-X (yaw-pitch-roll) intrinsic rotation.
+     *
+     * @param pitch Rotation around X axis (radians, positive = nose down)
+     * @param yaw Rotation around Y axis (radians, positive = nose right)
+     * @param roll Rotation around Z axis (radians, positive = right wing down)
+     * @return Rotation quaternion
+     *
+     * @example
+     * @code
+     * // Level flight, 30 degree right turn
+     * Quaternion q = Quaternion::from_euler(0.0, M_PI / 6, 0.0);
+     *
+     * // 45 degree pitch up, level heading and wings
+     * Quaternion q = Quaternion::from_euler(-M_PI / 4, 0.0, 0.0);
+     * @endcode
      */
     static Quaternion from_euler(double pitch, double yaw, double roll) {
         double cy = std::cos(yaw * 0.5);
@@ -80,6 +161,15 @@ public:
 
     /**
      * @brief Create identity quaternion (no rotation)
+     *
+     * Returns the identity quaternion (1, 0, 0, 0).
+     *
+     * @return Identity quaternion
+     *
+     * @example
+     * @code
+     * Quaternion q = Quaternion::identity();
+     * @endcode
      */
     static Quaternion identity() {
         return Quaternion(1.0, 0.0, 0.0, 0.0);
@@ -90,7 +180,19 @@ public:
     /**
      * @brief Quaternion multiplication (composition of rotations)
      *
-     * Order matters! q1 * q2 applies q1 first, then q2
+     * Combines two rotations. The result represents applying `other` first,
+     * then `this`. Order matters for quaternions!
+     *
+     * @param other Quaternion to multiply with
+     * @return Combined rotation quaternion
+     *
+     * @example
+     * @code
+     * Quaternion pitch_up = Quaternion::from_euler(-0.5, 0.0, 0.0);
+     * Quaternion turn_right = Quaternion::from_euler(0.0, 0.3, 0.0);
+     * Quaternion combined = turn_right * pitch_up;
+     * // Applies pitch_up first, then turn_right
+     * @endcode
      */
     Quaternion operator*(const Quaternion& other) const {
         return Quaternion(
@@ -104,7 +206,18 @@ public:
     /**
      * @brief Rotate a vector by this quaternion
      *
-     * v' = q * v * q⁻¹
+     * Applies the rotation represented by this quaternion to a vector.
+     * Uses the formula: v' = q * v * q⁻¹
+     *
+     * @param v Vector to rotate
+     * @return Rotated vector
+     *
+     * @example
+     * @code
+     * Quaternion q = Quaternion::from_axis_angle(Vec3::up(), M_PI / 2);
+     * Vec3 forward = Vec3(0.0, 0.0, 1.0);
+     * Vec3 right = q.rotate(forward);  // Results in (1, 0, 0)
+     * @endcode
      */
     Vec3 rotate(const Vec3& v) const {
         // Convert vector to pure quaternion
@@ -118,6 +231,12 @@ public:
 
     /**
      * @brief Scalar multiplication
+     *
+     * Multiplies all components by a scalar value.
+     * Used for interpolation and scaling operations.
+     *
+     * @param scalar Scalar value to multiply by
+     * @return Scaled quaternion
      */
     Quaternion operator*(double scalar) const {
         return Quaternion(w * scalar, x * scalar, y * scalar, z * scalar);
@@ -125,6 +244,12 @@ public:
 
     /**
      * @brief Quaternion addition
+     *
+     * Adds two quaternions component-wise.
+     * Used for interpolation and integration operations.
+     *
+     * @param other Quaternion to add
+     * @return Sum quaternion
      */
     Quaternion operator+(const Quaternion& other) const {
         return Quaternion(w + other.w, x + other.x, y + other.y, z + other.z);
@@ -132,6 +257,12 @@ public:
 
     /**
      * @brief Quaternion subtraction
+     *
+     * Subtracts two quaternions component-wise.
+     * Used for calculating rotation differences.
+     *
+     * @param other Quaternion to subtract
+     * @return Difference quaternion
      */
     Quaternion operator-(const Quaternion& other) const {
         return Quaternion(w - other.w, x - other.x, y - other.y, z - other.z);
@@ -139,6 +270,11 @@ public:
 
     /**
      * @brief Negation
+     *
+     * Returns the quaternion with all components negated.
+     * Note: For rotations, q and -q represent the same rotation.
+     *
+     * @return Negated quaternion
      */
     Quaternion operator-() const {
         return Quaternion(-w, -x, -y, -z);
@@ -148,13 +284,29 @@ public:
 
     /**
      * @brief Get magnitude (length)
+     *
+     * Returns the Euclidean norm: sqrt(w² + x² + y² + z²)
+     * For rotation quaternions, this should be 1.0.
+     *
+     * @return Magnitude of the quaternion
+     *
+     * @example
+     * @code
+     * Quaternion q = Quaternion::from_euler(0.5, 0.3, 0.2);
+     * double mag = q.magnitude();  // Should be ~1.0
+     * @endcode
      */
     double magnitude() const {
         return std::sqrt(w * w + x * x + y * y + z * z);
     }
 
     /**
-     * @brief Get squared magnitude (faster, no sqrt)
+     * @brief Get squared magnitude
+     *
+     * Returns the squared magnitude without the sqrt operation.
+     * Faster than magnitude() for comparisons.
+     *
+     * @return Squared magnitude
      */
     double magnitude_squared() const {
         return w * w + x * x + y * y + z * z;
@@ -163,7 +315,16 @@ public:
     /**
      * @brief Normalize to unit quaternion
      *
-     * Critical for rotation quaternions to prevent drift
+     * Returns a normalized version of this quaternion.
+     * Critical for rotation quaternions to prevent numerical drift.
+     *
+     * @return Normalized quaternion (magnitude = 1.0)
+     *
+     * @example
+     * @code
+     * Quaternion q(2.0, 0.0, 0.0, 0.0);
+     * Quaternion normalized = q.normalized();  // (1.0, 0.0, 0.0, 0.0)
+     * @endcode
      */
     Quaternion normalized() const {
         double mag = magnitude();
@@ -176,6 +337,16 @@ public:
 
     /**
      * @brief Normalize in-place
+     *
+     * Normalizes this quaternion, modifying its values directly.
+     * Call this periodically after integrating angular velocity.
+     *
+     * @example
+     * @code
+     * Quaternion orientation = Quaternion::identity();
+     * // After some operations...
+     * orientation.normalize();  // Keep as valid rotation
+     * @endcode
      */
     void normalize() {
         double mag = magnitude();
@@ -192,9 +363,19 @@ public:
     }
 
     /**
-     * @brief Get conjugate (for inverse rotation)
+     * @brief Get conjugate (inverse rotation)
      *
-     * For unit quaternions: conjugate = inverse
+     * Returns the conjugate quaternion: (w, -x, -y, -z)
+     * For unit quaternions (rotations), conjugate = inverse.
+     *
+     * @return Conjugate quaternion
+     *
+     * @example
+     * @code
+     * Quaternion q = Quaternion::from_euler(0.5, 0.0, 0.0);
+     * Quaternion q_inv = q.conjugate();
+     * Quaternion combined = q * q_inv;  // Approximately identity
+     * @endcode
      */
     Quaternion conjugate() const {
         return Quaternion(w, -x, -y, -z);
@@ -203,7 +384,10 @@ public:
     /**
      * @brief Get inverse (reciprocal)
      *
-     * q⁻¹ = q* / |q|²
+     * Returns the inverse quaternion: q⁻¹ = q* / |q|²
+     * For unit quaternions, this is the same as conjugate().
+     *
+     * @return Inverse quaternion
      */
     Quaternion inverse() const {
         double mag_sq = magnitude_squared();
@@ -218,8 +402,13 @@ public:
     /**
      * @brief Dot product (similarity measure)
      *
-     * Returns 1.0 for identical quaternions
-     * Returns -1.0 for opposite quaternions (same rotation)
+     * Returns the dot product with another quaternion.
+     * - 1.0: Identical quaternions
+     * - -1.0: Opposite quaternions (same rotation for unit quaternions)
+     * - 0.0: Orthogonal quaternions
+     *
+     * @param other Quaternion to compare with
+     * @return Dot product value in range [-1, 1]
      */
     double dot(const Quaternion& other) const {
         return w * other.w + x * other.x + y * other.y + z * other.z;
@@ -230,13 +419,21 @@ public:
     /**
      * @brief Spherical linear interpolation
      *
-     * Smooth interpolation between rotations.
-     * Takes the shortest path on the 4D sphere.
+     * Smoothly interpolates between two quaternions.
+     * Takes the shortest path on the 4D unit sphere.
+     * This is the preferred method for interpolating rotations.
      *
      * @param q1 Start quaternion
      * @param q2 End quaternion
      * @param t Interpolation factor [0, 1]
      * @return Interpolated quaternion
+     *
+     * @example
+     * @code
+     * Quaternion q1 = Quaternion::identity();
+     * Quaternion q2 = Quaternion::from_euler(0.5, 0.3, 0.1);
+     * Quaternion halfway = Quaternion::slerp(q1, q2, 0.5);
+     * @endcode
      */
     static Quaternion slerp(const Quaternion& q1, const Quaternion& q2, double t) {
         // Clamp t to [0, 1]
@@ -282,10 +479,15 @@ public:
     /**
      * @brief Convert to 3x3 rotation matrix
      *
-     * Returns column-major order:
+     * Fills a 9-element array with the rotation matrix representation.
+     * Uses column-major order for compatibility with OpenGL.
+     *
+     * Matrix layout:
      * [m0 m3 m6]
      * [m1 m4 m7]
      * [m2 m5 m8]
+     *
+     * @param matrix Output array of 9 doubles
      */
     void to_rotation_matrix(double matrix[9]) const {
         // Normalize first to ensure valid rotation
@@ -318,7 +520,16 @@ public:
     /**
      * @brief Get forward direction vector
      *
-     * Returns the transformed Z axis
+     * Returns the transformed Z axis (0, 0, 1) after rotation.
+     * Useful for getting the "forward" direction from an orientation.
+     *
+     * @return Forward direction vector
+     *
+     * @example
+     * @code
+     * Quaternion q = Quaternion::from_euler(0.0, M_PI / 4, 0.0);
+     * Vec3 forward = q.forward();  // Points in rotated Z direction
+     * @endcode
      */
     Vec3 forward() const {
         return rotate(Vec3(0.0, 0.0, 1.0));
@@ -327,7 +538,10 @@ public:
     /**
      * @brief Get up direction vector
      *
-     * Returns the transformed Y axis
+     * Returns the transformed Y axis (0, 1, 0) after rotation.
+     * Useful for getting the "up" direction from an orientation.
+     *
+     * @return Up direction vector
      */
     Vec3 up() const {
         return rotate(Vec3(0.0, 1.0, 0.0));
@@ -336,7 +550,10 @@ public:
     /**
      * @brief Get right direction vector
      *
-     * Returns the transformed X axis
+     * Returns the transformed X axis (1, 0, 0) after rotation.
+     * Useful for getting the "right" direction from an orientation.
+     *
+     * @return Right direction vector
      */
     Vec3 right() const {
         return rotate(Vec3(1.0, 0.0, 0.0));
@@ -346,6 +563,10 @@ public:
 
     /**
      * @brief Check if this is a valid rotation quaternion
+     *
+     * Returns true if the quaternion has non-zero magnitude.
+     *
+     * @return true if valid, false if degenerate
      */
     bool is_valid() const {
         return magnitude_squared() > 1e-16;
@@ -353,6 +574,13 @@ public:
 
     /**
      * @brief Check if approximately equal to another quaternion
+     *
+     * Tests if two quaternions represent the same rotation within tolerance.
+     * Accounts for q and -q representing the same rotation.
+     *
+     * @param other Quaternion to compare with
+     * @param tolerance Maximum allowed difference (default 1e-6)
+     * @return true if approximately equal
      */
     bool approximately_equals(const Quaternion& other, double tolerance = 1e-6) const {
         double dot_product = std::abs(dot(other));
@@ -361,6 +589,12 @@ public:
 
     /**
      * @brief Stream output for debugging
+     *
+     * Outputs quaternion in format "(w, x, y, z)"
+     *
+     * @param os Output stream
+     * @param q Quaternion to output
+     * @return Reference to output stream
      */
     friend std::ostream& operator<<(std::ostream& os, const Quaternion& q) {
         os << "(" << q.w << ", " << q.x << ", " << q.y << ", " << q.z << ")";
@@ -370,7 +604,17 @@ public:
     /**
      * @brief Get rotation axis and angle
      *
+     * Extracts the rotation axis and angle from this quaternion.
+     * Useful for understanding what rotation a quaternion represents.
+     *
      * @return Pair of (axis, angle_in_radians)
+     *
+     * @example
+     * @code
+     * Quaternion q = Quaternion::from_euler(0.5, 0.3, 0.1);
+     * auto [axis, angle] = q.to_axis_angle();
+     * std::cout << "Rotate " << angle << " rad around " << axis << std::endl;
+     * @endcode
      */
     std::pair<Vec3, double> to_axis_angle() const {
         Quaternion q = normalized();
